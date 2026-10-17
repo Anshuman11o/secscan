@@ -139,9 +139,8 @@ async function main(argv: string[]): Promise<number> {
   }
   if (args.command === 'report') return report(args)
   if (args.command === 'models') {
-    applyModelFlags(args)
     const reg = await loadRegistryModules()
-    say(renderModels(reg.list(), args.all))
+    say(renderModels(reg.list().filter(m => m.isDefault)))
     return EXIT.complete
   }
   return scan(args)
@@ -173,16 +172,12 @@ export async function scan(args: ScanArgs, dependencies: ScanDependencies = {}):
     if (args.configPath && !config) throw new UsageError(`--config ${configPath} does not exist`)
   }
 
-  // Registry loading follows flags, including a resumed custom endpoint.
-  if (previous) {
-    if (args.model || args.baseUrl) throw new UsageError(`run ${previous.run_id} was made with "${previous.model.key}"; a resumed run keeps its model`)
-    restoreModelEnv(previous)
-  }
-  let modelKey = applyModelFlags(args) ?? previous?.model.key ?? config?.config.model
+  // A scan always runs on the registry's product default; a resumed run keeps
+  // the model it was recorded with.
+  if (previous) restoreModelEnv(previous)
   const reg = await loadRegistryModules()
-  modelKey ??= reg.defaultKey()
-  let model = reg.info(modelKey)
-  if (model.transport !== 'openai') throw new UsageError(`"${model.key}" uses the lab-only "${model.transport}" transport and cannot run here. Pick another with --model.`)
+  let model = reg.info(previous?.model.key ?? reg.defaultKey())
+  if (model.transport !== 'openai') throw new UsageError(`"${model.key}" uses the lab-only "${model.transport}" transport and cannot run here.`)
   let limits = merge(merge(NO_LIMITS, previous ? previous.limits : config?.config.limits ?? {}), args.limits)
   if (previous) assertSameReadScope(previous.limits, limits)
   const input = (dependencies.io ?? terminalIO)()
@@ -194,8 +189,6 @@ export async function scan(args: ScanArgs, dependencies: ScanDependencies = {}):
         if (!previous && !args.noConfig && !args.configPath && target !== initialTarget) {
           configPath = join(target, CONFIG_FILENAME)
           config = loadConfig(configPath)
-          model = reg.info(applyModelFlags(args) ?? config?.config.model ?? reg.defaultKey())
-          if (model.transport !== 'openai') throw new UsageError(`"${model.key}" uses a lab-only transport. Pick another with --model.`)
           limits = merge(merge(NO_LIMITS, config?.config.limits ?? {}), args.limits)
         }
         return { model, limits }
@@ -207,8 +200,7 @@ export async function scan(args: ScanArgs, dependencies: ScanDependencies = {}):
   if (!round) { say('Not started.'); return EXIT.complete }
   const { target, reportsRoot } = round
   limits = round.limits
-  if (limits.max_cost_usd != null && !model.price) throw new UsageError(`--budget needs a priced model, and "${model.key}" has no price. ` +
-    (model.origin === 'generic' ? 'Pass --price <in/out>.' : 'Add price_per_mtok in a --models-file entry.'))
+  if (limits.max_cost_usd != null && !model.price) throw new UsageError(`--budget needs a priced model, and "${model.key}" has no price.`)
   model = reg.info(model.key) // hidden input may have supplied the key
   if (!args.configPath) configPath = join(target, CONFIG_FILENAME)
   const targetDisplay = relative(process.cwd(), target) === '' ? '.' : (relative(process.cwd(), target).startsWith('..') ? target : `./${relative(process.cwd(), target)}`)
@@ -614,7 +606,7 @@ export async function scan(args: ScanArgs, dependencies: ScanDependencies = {}):
           drop: [...agentClasses].filter(id => !finalClasses.has(id)),
           add: [...finalClasses].filter(id => !agentClasses.has(id)),
         }
-        writeConfig(configPath, configFromRun(model.origin === 'registry' ? model.key : null, limits, classes))
+        writeConfig(configPath, configFromRun(limits, classes))
         reviewIO.write(`Saved ${configPath}`)
       },
     })

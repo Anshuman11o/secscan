@@ -2,23 +2,17 @@
 
 **An AI agent that scans your codebase for security vulnerabilities and reports them.**
 
-secscan runs from your terminal as an npm package. Point it at a repository, set a budget, and it returns every vulnerability it finds with the file, the line and the OWASP class, in a JSON bug report and an HTML summary.
-
-> **Preview (0.1.0).** Treat findings as leads for a human to check, not as a verdict.
+secscan runs from your terminal as an npm package. Point it at a repository, set a budget, and it returns every vulnerability it finds with the file, the line and the vulnerability class associated, in a JSON bug report and an HTML summary.
 
 ## Benchmark
 
-Latest runs of secscan on its default model, **GPT-6 Luna**, against held-out repositories with known vulnerabilities (2026-10-16):
+**GPT-6 Luna** is the default scanner model, because of its strong benchmark results: high recall and low cost.
 
 | Target | Known vulnerabilities | Recall | Total run cost |
 |---|---|---|---|
 | AI web app (Python, React, Terraform) | 23 | **91.3%** | **$0.20** |
 | Android app (Kotlin) | 29 | **86.2%** | **$0.35** |
 | Smart contracts with known bugs (Solidity) | 207 | **92.3%** | **$0.85** |
-
-Recall counts a known vulnerability as found when a finding points at the right file within 15 lines of it.
-
-**Why GPT-6 Luna is the default:** it finds close to 9 in 10 known vulnerabilities while a full scan costs under a dollar, at $0.10 / $0.50 per million input / output tokens. You can switch models with `--model`; see [Models and cost](USAGE.md#models-and-cost).
 
 ## What it finds
 
@@ -63,13 +57,14 @@ secscan then reads the repository, picks the vulnerability classes that fit it, 
 
 - **Languages measured:** TypeScript, Python, Terraform, Kotlin (Android), Solidity, C (C is the weakest today).
 - **Also recognized, unmeasured:** JavaScript, Java, Go, Ruby, PHP, C#, Rust, C++, Swift, Dart.
+- **Model:** OpenAI GPT-6 Luna.
 - **Static analysis only:** it reads source code; it does not run your app, try exploits or fix code.
 
 ## Learn more
 
 - [Usage guide](USAGE.md): a scan step by step, [commands and options](USAGE.md#commands-and-options), [configuration](USAGE.md#configuration)
 - [Reports](USAGE.md#reports): what is in `report.html` and `findings.json`, resuming stopped runs
-- [Models and cost](USAGE.md#models-and-cost): other models, your own endpoint
+- [Cost](USAGE.md#cost)
 - [Privacy and safety](USAGE.md#privacy-and-safety): what leaves your machine
 - [Limitations](USAGE.md#limitations) and [troubleshooting](USAGE.md#troubleshooting)
 - [Sample report](https://raw.githack.com/anshuman11o/secscan/main/sample-report.html) ([source](sample-report.html))

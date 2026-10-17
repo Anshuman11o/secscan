@@ -1,6 +1,6 @@
 # secscan usage guide
 
-Everything beyond the [quickstart](README.md#quickstart): what a scan does step by step, every command and option, configuration, the reports, models and cost, privacy, limitations and troubleshooting.
+Everything beyond the [quickstart](README.md#quickstart): what a scan does step by step, every command and option, configuration, the reports, cost, privacy, limitations and troubleshooting.
 
 **Contents**
 
@@ -9,7 +9,7 @@ Everything beyond the [quickstart](README.md#quickstart): what a scan does step 
 - [Commands and options](#commands-and-options)
 - [Reports](#reports)
 - [Configuration](#configuration)
-- [Models and cost](#models-and-cost)
+- [Cost](#cost)
 - [Privacy and safety](#privacy-and-safety)
 - [Limitations](#limitations)
 - [Troubleshooting](#troubleshooting)
@@ -79,14 +79,10 @@ secscan hunts the classes below. A class selection step decides from recon's vie
 | Command | What it does |
 |---|---|
 | `secscan scan [dir]` | Scan the repository in `dir`, or the current directory. The default command. |
-| `secscan models [--all]` | List the models with price, measured or unmeasured, and whether the API key is set. |
+| `secscan models` | Show the model secscan scans with, its price, and whether its API key is set. |
 | `secscan report [run-id]` | Rebuild a run's `report.html` and `findings.json` from what the run wrote. Default: the newest run. |
 | `secscan help [command]` | Show help for every command, or for one. |
 | `secscan version` | Print the version. |
-
-| Option | What it does | Command |
-|---|---|---|
-| `--all` | Also list lab-only models, hidden by default. | `secscan models` |
 
 ### Scope
 
@@ -106,18 +102,6 @@ secscan hunts the classes below. A class selection step decides from recon's vie
 | `--timeout <time>` | Start no new file after this long: seconds, or `90s`, `30m`, `1h`. Each resume starts a new window. |  |
 | `--concurrency <n>` | Files scanned at once. | derived from the model's rate limits |
 
-### Model
-
-Also works with `secscan models`.
-
-| Option | What it does | Default |
-|---|---|---|
-| `--model <key>` | A model key or alias from `secscan models`. With `--base-url`, the endpoint's own model id. | the model marked `*` in `secscan models` |
-| `--base-url <url>` | Use an OpenAI-compatible endpoint instead, with `--model`. A scan needs its Responses API with web search. |  |
-| `--api-key-env <VAR>` | The variable holding that endpoint's API key. | `SCANNER_CUSTOM_API_KEY` |
-| `--price <in/out>` | That endpoint's price in USD per million input/output tokens, e.g. `0.5/1.5`. Needed for a budget. |  |
-| `--models-file <path>` | Your own `models.json` overlay. Adds models; never replaces shipped ones. |  |
-
 ### Classes
 
 | Option | What it does | Default |
@@ -130,7 +114,7 @@ Also works with `secscan models`.
 | Option | What it does | Default |
 |---|---|---|
 | `-y`, `--yes` | Skip every prompt. Needs `--budget`, except with `--resume`. |  |
-| `--resume [run-id]` | Continue a stopped run with its model, spend and finished files. | the latest INCOMPLETE run |
+| `--resume [run-id]` | Continue a stopped run with its spend and finished files. | the latest INCOMPLETE run |
 | `--config <path>` | Read settings from this file. | `<dir>/secscan.config.json` |
 | `--no-config` | Ignore `secscan.config.json`. |  |
 
@@ -158,7 +142,7 @@ secscan scan . --yes --budget 10
 # Continue the latest INCOMPLETE run.
 secscan scan --resume
 
-# Show the models and which API keys are set.
+# Show the model and whether its API key is set.
 secscan models
 ```
 
@@ -215,7 +199,6 @@ A resumed run keeps its model, spend and finished files, and its report then cov
 
 ```json
 {
-  "model": "luna6",
   "paths": ["src", "api"],
   "include": ["**/*.ts"],
   "exclude": ["**/*.test.ts", "vendor"],
@@ -224,47 +207,21 @@ A resumed run keeps its model, spend and finished files, and its report then cov
 }
 ```
 
-The file cannot name an endpoint, a credential variable or a models overlay. It is repository content, so anyone who can change it in a pull request could otherwise send your code and your key elsewhere. A fresh `--yes` run still needs `--budget` on the command line, even when the file sets `max_cost`.
+The file cannot name a model, an endpoint, a credential variable or a models overlay. It is repository content, so anyone who can change it in a pull request could otherwise send your code and your key elsewhere. A fresh `--yes` run still needs `--budget` on the command line, even when the file sets `max_cost`.
 
 **`.secscanignore`** in the repository root uses `.gitignore` syntax and is applied after your `.gitignore` files. Put anything there you never want scanned or sent to the provider.
 
-**`--models-file <path>`** adds models from your own JSON file, in the same format as the shipped [`models.json`](tools/scanner/shared/models.json): a `targets` object and optional `aliases`. An overlay can add models but never redefine a shipped one or claim a benchmark result.
+## Cost
 
-## Models and cost
+secscan is bring-your-own-key. It has no account and no server, and OpenAI bills the key you supply. secscan scans with one model, OpenAI GPT-6 Luna, at $0.10 per million input tokens and $0.50 per million output tokens; there is no option to change it. `secscan models` shows the model, its price and whether `OPENAI_API_KEY` is set. `secscan help` and `secscan models` make no model calls.
 
-secscan is bring-your-own-key. It has no account and no server, and the model provider bills the key you supply. `secscan help` and `secscan models` make no model calls.
-
-`secscan models` lists the models this release ships: the key you pass to `--model`, the provider's model id, the price per million input and output tokens with the date it was checked, whether the model is measured, and whether its API key variable is set. The default is marked `*`.
-
-- **Measured** means the research harness scored that model on its benchmark: OWASP Juice Shop, a TypeScript application, against 97 known vulnerabilities held in a private answer key.
-- **Unmeasured** means everything else: the default model, GPT-6 Luna, every model you add with `--models-file`, and every `--base-url` endpoint. GPT-6 Luna has no Juice Shop score, but its results through secscan on three held-out test repositories are in the [README benchmark](README.md#benchmark).
-
-For reference, the measured results on Juice Shop. Recall counts a known vulnerability as found when a finding names the right file, the exact line and the right class; localization allows 15 lines either side.
-
-| Model (`--model`) | Recall | Localization | Cost | Wall clock |
-|---|---|---|---|---|
-| `luna` (GPT-5.6 Luna) | 71.1% | 88.7% | $4.37 | 13m04s |
-| `glm52` (GLM-5.2) | 67.0% | 85.6% | $17.01 | about 18.5 min |
-| `gemini36flash` (Gemini 3.6 Flash) | 58.8% | 75.3% | $24.85 | 32m12s |
-
-These numbers come from the research pipeline in August 2026, before this CLI and its class selection step existed, on 541 hunted files out of 865. They describe the approach and those models, not this release, and not your code. The default model's results through secscan itself are in the [README benchmark](README.md#benchmark).
-
-The plan screen shows the cost estimate for your repository, with an accuracy band, before the hunt starts. Recon and class selection have already spent a little by then, and that spend is included in the total.
-
-**Your own endpoint.** Any OpenAI-compatible endpoint can stand in for a shipped model:
-
-```sh
-export SCANNER_CUSTOM_API_KEY=...
-secscan scan . --base-url https://llm.example.com/v1 --model <model-id> --price 0.5/1.5
-```
-
-`--price` is USD per million input/output tokens, and a budget needs it. `--api-key-env` names a different variable for the key. Class selection calls the OpenAI Responses API with its web search tool, so the endpoint must offer both; without them, a scan stops at that step after recon has spent its share.
+The plan screen shows the cost estimate for your repository, with an accuracy band, before the hunt starts. Recon and class selection have already spent a little by then, and that spend is included in the total. The scan stops at the budget you set. Typical total costs on test repositories are in the [README benchmark](README.md#benchmark).
 
 ## Privacy and safety
 
-- **Your code goes only to the model provider you choose.** Recon sends a map of the repository and parts of some files, and the hunt sends each scanned file, all to the selected model's endpoint. Class selection uses that provider's web search tool, and the provider runs those searches.
+- **Your code goes only to OpenAI.** Recon sends a map of the repository and parts of some files, and the hunt sends each scanned file, all to the OpenAI API. Class selection uses OpenAI's web search tool, and OpenAI runs those searches.
 - **No telemetry and no server.** secscan has no backend and sends nothing anywhere else.
-- **Keys stay in your environment.** secscan reads the key from the variable the model names. If it asks for one, it keeps it in memory for that run and does not write it to disk.
+- **Keys stay in your environment.** secscan reads the key from `OPENAI_API_KEY`. If it asks for one, it keeps it in memory for that run and does not write it to disk.
 - **Reports stay local.** `.secscan/` carries its own `.gitignore` (`*`), so runs are never committed by accident.
 - **The model cannot widen its own reach.** When the model asks for another file, a read guard allows only files recon selected inside the target. `.git/`, the reports folder and anything you excluded stay out.
 - **Secrets in the tree are withheld.** Key and certificate files (`.pem`, `.key`, `.crt`) are sent as a line count only, and private-key blocks inside other files are redacted.
@@ -276,12 +233,11 @@ secscan scan . --base-url https://llm.example.com/v1 --model <model-id> --price 
 - **Static reasoning only.** The model reads one file at a time, with recon's map of the repository and any extra files it asks for. A flaw that spans many files can be missed.
 - **Precision.** The best measured run had a precision proxy of 12.5%. Expect to triage false positives.
 - **Re-runs differ.** Model output is not deterministic, so two scans of the same code can report different findings.
-- **Model endpoints.** Class selection needs the OpenAI Responses API with web search, so a model whose endpoint lacks either cannot complete a scan.
 - **Windows** is supported on a best-effort basis until it has been smoke-tested. macOS and Linux are the primary platforms.
 
 ## Troubleshooting
 
-**"OPENAI_API_KEY is not set."** A run with `--yes`, or one not attached to a terminal, needs the key in the environment before it starts. Export it, or run interactively to be asked once. `secscan models` shows which variable each model reads and whether it is set.
+**"OPENAI_API_KEY is not set."** A run with `--yes`, or one not attached to a terminal, needs the key in the environment before it starts. Export it, or run interactively to be asked once. `secscan models` shows whether it is set.
 
 **Behind a proxy.** Set `HTTPS_PROXY` (or `HTTP_PROXY`) and also `NODE_USE_ENV_PROXY=1`, which makes Node route the model calls through it. Node's built-in proxy support needs a recent Node 22 or 24 release; Node 20 does not have it.
 

@@ -7,6 +7,11 @@ import {
   type RunLimits,
 } from '../../stage1-budget-governor/src/limits.js'
 
+/**
+ * How a model is chosen in the registry. The CLI takes no model flags: a scan
+ * always runs on the registry's product default. Only a resumed run from an
+ * earlier release still restores its recorded model through these.
+ */
 export interface ModelFlags {
   /** A registry key or alias — or, with baseUrl, the endpoint's model id. */
   model?: string
@@ -23,7 +28,7 @@ export interface ClassEdits {
   add?: string[]
 }
 
-export interface ScanArgs extends ModelFlags {
+export interface ScanArgs {
   command: 'scan'
   target: string
   targetProvided: boolean
@@ -38,9 +43,8 @@ export interface ScanArgs extends ModelFlags {
   noOpen: boolean
 }
 
-export interface ModelsArgs extends ModelFlags {
+export interface ModelsArgs {
   command: 'models'
-  all: boolean
 }
 
 /** `secscan report [run-id]`: rebuild a run's report from what is on disk. */
@@ -140,7 +144,6 @@ export interface CliDefinition {
 }
 
 const SCAN: readonly CommandName[] = ['scan']
-const SCAN_MODELS: readonly CommandName[] = ['scan', 'models']
 const SCAN_REPORT: readonly CommandName[] = ['scan', 'report']
 
 export function cliDefinition(customKeyDefault: string): CliDefinition {
@@ -154,7 +157,7 @@ export function cliDefinition(customKeyDefault: string): CliDefinition {
       { command: `npx ${PACKAGE_NAME}`, note: 'scan it without installing anything' },
       { command: 'secscan', note: `the same, after \`npm install -g ${PACKAGE_NAME}\`` },
     ],
-    quickstartNote: 'Needs Node 20 or later and the model\'s API key in your environment. `secscan models` shows the variable each model reads and whether it is set.',
+    quickstartNote: 'Needs Node 20 or later and the model\'s API key in your environment. `secscan models` shows the variable it reads and whether it is set.',
     commands: [
       {
         name: 'scan',
@@ -174,17 +177,14 @@ export function cliDefinition(customKeyDefault: string): CliDefinition {
       },
       {
         name: 'models',
-        synopsis: 'models [--all]',
-        usage: ['secscan models [--all] [options]'],
-        summary: 'List the models with price, measured or unmeasured, and whether the API key is set.',
+        synopsis: 'models',
+        usage: ['secscan models'],
+        summary: 'Show the model secscan scans with, its price, and whether its API key is set.',
         about: [
-          'The default model is marked `*`. Measured means scored by the research harness on its benchmark; every other model, every `--models-file` entry and every `--base-url` endpoint is unmeasured. Makes no model calls.',
-        ],
-        options: [
-          { name: '--all', description: 'Also list lab-only models, hidden by default.', commands: ['models'] },
+          'secscan runs on one model; there is no option to change it. Makes no model calls.',
         ],
         examples: [
-          { command: 'secscan models', note: 'Show the models and which API keys are set.', featured: true },
+          { command: 'secscan models', note: 'Show the model and whether its API key is set.', featured: true },
         ],
       },
       {
@@ -242,21 +242,6 @@ export function cliDefinition(customKeyDefault: string): CliDefinition {
         ],
       },
       {
-        title: 'Model',
-        options: [
-          { name: '--model', value: '<key>', commands: SCAN_MODELS, default: 'the model marked `*` in `secscan models`',
-            description: 'A model key or alias from `secscan models`. With `--base-url`, the endpoint\'s own model id.' },
-          { name: '--base-url', value: '<url>', commands: SCAN_MODELS,
-            description: 'Use an OpenAI-compatible endpoint instead, with `--model`. A scan needs its Responses API with web search.' },
-          { name: '--api-key-env', value: '<VAR>', commands: SCAN_MODELS, default: `\`${customKeyDefault}\``,
-            description: 'The variable holding that endpoint\'s API key.' },
-          { name: '--price', value: '<in/out>', commands: SCAN_MODELS,
-            description: 'That endpoint\'s price in USD per million input/output tokens, e.g. `0.5/1.5`. Needed for a budget.' },
-          { name: '--models-file', value: '<path>', commands: SCAN_MODELS,
-            description: 'Your own `models.json` overlay. Adds models; never replaces shipped ones.' },
-        ],
-      },
-      {
         title: 'Classes',
         options: [
           { name: '--drop-class', value: '<id>', repeatable: true, commands: SCAN,
@@ -271,7 +256,7 @@ export function cliDefinition(customKeyDefault: string): CliDefinition {
           { name: '--yes', short: '-y', commands: SCAN,
             description: 'Skip every prompt. Needs `--budget`, except with `--resume`.' },
           { name: '--resume', value: '[run-id]', optionalValue: true, commands: SCAN, default: 'the latest INCOMPLETE run',
-            description: 'Continue a stopped run with its model, spend and finished files.' },
+            description: 'Continue a stopped run with its spend and finished files.' },
           { name: '--config', value: '<path>', commands: SCAN, default: '`<dir>/secscan.config.json`',
             description: 'Read settings from this file.' },
           { name: '--no-config', commands: SCAN,
@@ -475,10 +460,8 @@ export function parseArgs(argv: readonly string[]): Args {
   if (first === 'version') return { command: 'version' }
   if (first === 'scan' || first === 'models' || first === 'report') args.shift()
 
-  const model: ModelFlags = {}
   const limits: Partial<RunLimits> = {}
   let yes = false
-  let all = false
   let configPath: string | undefined
   let noConfig = false
   let resume: string | true | undefined
@@ -511,11 +494,6 @@ export function parseArgs(argv: readonly string[]): Args {
       try { return f() } catch (err: any) { throw new UsageError(err?.message ?? String(err)) }
     }
     switch (a) {
-      case '--model': model.model = value(); break
-      case '--base-url': model.baseUrl = value(); break
-      case '--api-key-env': model.apiKeyEnv = value(); break
-      case '--price': model.price = value(); break
-      case '--models-file': model.modelsFile = value(); break
       case '--budget': case '--max-cost': { const v = value(); limits.max_cost_usd = wrap(() => parseCost(v, a)); break }
       case '--max-files': { const v = value(); limits.max_files = wrap(() => parsePositiveInt(v, '--max-files')); break }
       case '--max-file-size': { const v = value(); limits.max_file_size = wrap(() => parseSize(v, '--max-file-size')); break }
@@ -537,7 +515,6 @@ export function parseArgs(argv: readonly string[]): Args {
         break
       }
       case '-y': case '--yes': yes = true; break
-      case '--all': all = true; break
       case '--config': configPath = value(); break
       case '--no-config': noConfig = true; break
       case '--out': out = value(); break
@@ -551,20 +528,12 @@ export function parseArgs(argv: readonly string[]): Args {
     }
   }
 
-  if (model.baseUrl && !model.model) throw new UsageError('--base-url needs --model <the endpoint\'s model id>')
-  if (!model.baseUrl && (model.apiKeyEnv || model.price)) {
-    throw new UsageError('--api-key-env and --price describe a custom endpoint; they need --base-url')
-  }
-  if (model.apiKeyEnv && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(model.apiKeyEnv)) {
-    throw new UsageError(`--api-key-env "${model.apiKeyEnv}" is not an environment variable name`)
-  }
-
   if (first === 'models') {
     if (positional.length) throw new UsageError(`unexpected argument "${positional[0]}"`)
-    return { command: 'models', all, ...model }
+    return { command: 'models' }
   }
   if (first === 'report') {
-    const scanOnly = Object.keys(limits).length || Object.keys(model).length || yes || all || configPath || noConfig || resume !== undefined || classes
+    const scanOnly = Object.keys(limits).length || yes || configPath || noConfig || resume !== undefined || classes
     if (scanOnly) throw new UsageError('secscan report takes only [run-id], --out and --no-open')
     if (positional.length > 1) throw new UsageError(`expected one run id, got ${positional.join(' ')}`)
     return { command: 'report', ...(positional[0] ? { runId: positional[0] } : {}), ...(out ? { out } : {}), noOpen }
@@ -584,6 +553,5 @@ export function parseArgs(argv: readonly string[]): Args {
     out,
     ...(classes ? { classes } : {}),
     noOpen,
-    ...model,
   }
 }

@@ -92,35 +92,27 @@ export function measuredLabel(m: ModelInfo): string {
   return `measured: recall ${m.benchmark.recall}, localization ${m.benchmark.localization} on Juice Shop (${usd(m.benchmark.cost_usd)}, ${m.benchmark.run})`
 }
 
-/** Where `secscan models` sends the reader for what the measured figures mean. */
-export const MODELS_README = 'https://github.com/anshuman11o/secscan/blob/main/USAGE.md#models-and-cost'
+/** Where `secscan models` sends the reader for the model's benchmark results. */
+export const MODELS_README = 'https://github.com/anshuman11o/secscan#benchmark'
 
 /**
- * `secscan models`. Lab-only entries (models.json `lab_only`) and lab
- * transports are hidden unless `all`. The npm package ships without the
- * lab-only entries, so there `--all` adds nothing.
+ * `secscan models`: the one model secscan scans with (the registry's product
+ * default), its price and whether its API key is set. There is no option to
+ * change it.
  */
-export function renderModels(models: ModelInfo[], all: boolean): string {
-  const shown = models.filter(m => all || (!m.labOnly && m.transport === 'openai'))
-  const rows = shown.map(m => [
-    (m.isDefault ? '* ' : '  ') + m.key,
-    m.model,
+export function renderModels(models: ModelInfo[]): string {
+  const rows = models.map(m => [
+    m.label ? `${m.label} (${m.model})` : m.model,
     m.price ? `$${m.price.input} / $${m.price.output}` + (m.priceAsOf ? ` (${m.priceAsOf})` : '') : 'unpriced',
-    m.measured ? `measured (${m.benchmark!.recall} recall, ${m.benchmark!.localization} localized)` : 'unmeasured',
-    m.transport === 'openai' ? `${m.apiKeyEnv} ${m.keyPresent ? 'found' : 'not set'}` : `lab transport: ${m.transport}`,
-    m.origin === 'registry' ? '' : m.origin,
+    `${m.apiKeyEnv} ${m.keyPresent ? 'found' : 'not set'}`,
   ])
-  const head = ['  KEY', 'MODEL', 'PRICE in / out per MTok', 'STATUS', 'CREDENTIAL', 'SOURCE']
+  const head = ['MODEL', 'PRICE in / out per MTok', 'CREDENTIAL']
   const widths = head.map((h, i) => Math.max(h.length, ...rows.map(r => r[i].length)))
   const line = (r: string[]) => r.map((c, i) => c.padEnd(widths[i])).join('  ').trimEnd()
-  const hidden = models.length - shown.length
   return [
     line(head),
     ...rows.map(line),
     '',
-    '* default. Measured = scored by the lab on OWASP Juice Shop (TypeScript), 97 known vulnerabilities;',
-    `  recall is exact line + class, localization is within 15 lines. What the figures mean: ${MODELS_README}`,
-    '  Every other model, every --models-file entry and every --base-url endpoint is unmeasured.',
-    ...(hidden ? [`  ${hidden} lab-only model(s) hidden; --all shows them.`] : []),
+    `secscan scans with this model only. Benchmark results: ${MODELS_README}`,
   ].join('\n')
 }

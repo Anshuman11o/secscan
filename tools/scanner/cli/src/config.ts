@@ -6,7 +6,6 @@
  * confirmation screen's [s] writes the same file.
  *
  *   {
- *     "model": "luna",
  *     "paths": ["src", "api"],
  *     "include": ["**\/*.ts"],
  *     "exclude": ["**\/*.test.ts", "vendor"],
@@ -34,7 +33,6 @@ import {
 export const CONFIG_FILENAME = 'secscan.config.json'
 
 export interface SecscanConfig {
-  model?: string
   classes?: ClassEdits
   paths?: string[]
   include?: string[]
@@ -50,12 +48,11 @@ export interface SecscanConfig {
 
 /** The config after validation: limits parsed to their canonical units. */
 export interface ResolvedConfig {
-  model?: string
   classes?: ClassEdits
   limits: Partial<RunLimits>
 }
 
-const TOP_KEYS = new Set(['$schema', '_comment', 'model', 'paths', 'include', 'exclude', 'limits', 'classes'])
+const TOP_KEYS = new Set(['$schema', '_comment', 'paths', 'include', 'exclude', 'limits', 'classes'])
 const LIMIT_KEYS = new Set(['max_cost', 'max_files', 'max_file_size', 'timeout', 'concurrency'])
 const FORBIDDEN: Record<string, string> = {
   base_url: 'an endpoint',
@@ -87,13 +84,10 @@ export function validateConfig(raw: unknown, where = CONFIG_FILENAME): ResolvedC
           `can change the file in a pull request could redirect the scan and its key. Pass it on the command line instead.`,
       )
     }
+    if (k === 'model') throw new Error(`${where}: "model" is not supported: secscan always scans with its one model, so remove the field`)
     if (!TOP_KEYS.has(k)) throw new Error(`${where}: unknown field "${k}"`)
   }
   const out: ResolvedConfig = { limits: {} }
-  if (obj.model !== undefined) {
-    if (typeof obj.model !== 'string' || !obj.model) throw new Error(`${where}: "model" must be a model key string`)
-    out.model = obj.model
-  }
   if (obj.classes !== undefined) {
     const classes = obj.classes as Record<string, unknown>
     if (classes == null || typeof classes !== 'object' || Array.isArray(classes)) {
@@ -155,10 +149,9 @@ export function loadConfig(path: string): LoadedConfig | null {
   }
 }
 
-/** The file [s] writes: the confirmed model, scope, limits and reviewed class edits. */
-export function configFromRun(model: string | null, limits: RunLimits, classes?: ClassEdits): SecscanConfig {
+/** The file [s] writes: the confirmed scope, limits and reviewed class edits. */
+export function configFromRun(limits: RunLimits, classes?: ClassEdits): SecscanConfig {
   const cfg: SecscanConfig = {}
-  if (model) cfg.model = model
   if (classes) {
     cfg.classes = {}
     if (classes.drop !== undefined) cfg.classes.drop = [...classes.drop]
