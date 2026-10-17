@@ -5,7 +5,7 @@
  * the INSTALLED `secscan` (through npm's bin link, so the shebang, the bin
  * symlink or .cmd shim and the entry guard are all exercised):
  *
- *   --version  --help  models  scan <tiny dir> --yes --budget 0.01 (no key)
+ *   --version  --help  models (one model; --model refused)  scan <tiny dir> --yes --budget 0.01 (no key)
  *
  * Never needs an API key and never spends: every credential variable the
  * registry names is removed from the scan step's environment, so the scan must
@@ -117,14 +117,19 @@ try {
       const r = secscan('models')
       expect(r.code === 0, `exit ${r.code}\n${tail(r.err || r.out)}`)
       const def = installedRegistry.product_default_provider
-      expect(new RegExp(`^\\* ${def}\\s`, 'm').test(r.out), `the default "${def}" is not listed with "*"`)
-      const table = r.out.split(/\n\s*\n/)[0].split('\n').slice(1)
-      const listed = table.map(l => /^(?:\* | {2})(\S+)\s/.exec(l)?.[1]).filter(Boolean)
-      const shipped = Object.keys(installedRegistry.targets).sort()
-      expect(JSON.stringify([...listed].sort()) === JSON.stringify(shipped), `listed ${listed.join(', ')}; shipped ${shipped.join(', ')}`)
+      const id = installedRegistry.targets[def]?.model
+      expect(id, `the product default "${def}" is not in the shipped registry`)
+      const rows = r.out.split(/\n\s*\n/)[0].split('\n').slice(1).filter(l => l.trim())
+      expect(rows.length === 1, `expected one model row, got ${rows.length}:\n${rows.join('\n')}`)
+      expect(rows[0].includes(`(${id})`), `the row does not show the default model ${id}: ${rows[0]}`)
+      expect(/this model only/.test(r.out), 'the listing does not say secscan scans with one model')
       const lab = Object.entries(installedRegistry.targets).filter(([, t]) => t.lab_only).map(([k]) => k)
       expect(lab.length === 0, `the installed registry still carries lab_only entries: ${lab.join(', ')}`)
-      return `${listed.length} models, default ${def}`
+      for (const args of [['models', '--all'], ['scan', '--model', def]]) {
+        const refused = secscan(...args)
+        expect(refused.code === 2 && /unknown option/.test(refused.err + refused.out), `secscan ${args.join(' ')} was not refused (exit ${refused.code})`)
+      }
+      return `one model, ${id}; --model and --all refused`
     })
 
     step('secscan scan <tiny dir> --yes --budget 0.01 with no key: clean refusal, no stage launched', () => {
