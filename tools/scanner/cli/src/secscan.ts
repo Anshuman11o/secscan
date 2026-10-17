@@ -429,8 +429,7 @@ export async function scan(args: ScanArgs, dependencies: ScanDependencies = {}):
     }
     if (progress && fresh) {
       const s = progress.findings.by_severity
-      say(`Findings: ${progress.findings.total} (${severityText(s)}) — ` +
-        'candidates from static reasoning, not verified')
+      say(`Findings: ${progress.findings.total} (${severityText(s)}), not verified`)
     }
     if (totals.calls || fresh) {
       say(`Spend: ${usd(record.spend.spent_usd)}` +

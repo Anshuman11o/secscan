@@ -276,7 +276,8 @@ export function renderSummary(s: ConfirmationSummary): string {
 
   const detail = s.estimate.breakdown
   const minutes = Math.max(1, Math.round(s.estimate.seconds / 60))
-  const band = detail && (detail.band_pct == null ? 'Can vary widely (fewer than 10 files).' : `Accuracy band: ±${detail.band_pct}% (90%).`)
+  const band = detail && 'Output cost depends on how many bugs per file. ' +
+    (detail.band_pct == null ? 'Can vary widely (fewer than 10 files).' : `Accuracy band: ±${detail.band_pct}% (90%).`)
   if (s.budget_message) {
     out.push(`Total estimate: ${usd(s.estimate.usd)}, ~${minutes} min`)
     if (detail) out.push(`  ${usd(detail.spent_usd)} spent + input ${usd(detail.input_usd)} + output ${usd(detail.output_usd)}.`)
